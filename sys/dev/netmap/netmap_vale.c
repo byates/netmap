@@ -2174,6 +2174,32 @@ retry:
 		}
 		my_start = j = kring->nkr_hwlease;
 		howmany = nm_kr_space(kring, 1);
+
+		if (howmany == 0)
+		{
+			{
+				int attempts = 0;
+				//pr_info("**** no buffers ****\n");
+				while(howmany == 0)
+				{
+					mtx_unlock(&kring->q_lock);
+					usleep_range(100,100);
+					kring->nm_notify(kring, 0);
+					mtx_lock(&kring->q_lock);
+					if (kring->nkr_stopped) {
+						mtx_unlock(&kring->q_lock);
+						goto cleanup;
+					}
+					howmany = nm_kr_space(kring, 1);
+					attempts++;
+					if (attempts > 1000)
+					{
+						pr_info("!!!! buffer check attempt limit !!!!\n");
+						break;
+					}
+				}
+			}
+		}
 		if (needed < howmany)
 			howmany = needed;
 		lease_idx = nm_kr_lease(kring, howmany, 1);
@@ -2182,6 +2208,11 @@ retry:
 		/* only retry if we need more than available slots */
 		if (retry && needed <= howmany)
 			retry = 0;
+		if (needed > howmany)
+		{
+			//pr_info("srcmtu=%u, dstmtu=%u, needed=%u, howmany=%u", na->mfs, dst_na->mfs, needed, howmany);
+			//pr_info("retry=%u  needed=%u  howmany=%u", retry, needed, howmany);
+		}
 
 		/* copy to the destination queue */
 		while (howmany > 0) {
@@ -2280,6 +2311,11 @@ retry:
 
 		    update_pos = kring->nr_hwtail;
 
+			if (retry || (my_start != update_pos))
+			{
+				//pr_info("my_start=%u  update_pos=%u  lease_idx=%u\n", my_start, update_pos, lease_idx);
+			}
+
 		    if (my_start == update_pos) {
 			/* all slots before my_start have been reported,
 			 * so scan subsequent leases to see if other ranges
@@ -2294,6 +2330,12 @@ retry:
 			/* j is the new 'write' position. j != my_start
 			 * means there are new buffers to report
 			 */
+
+			if (retry)
+			{
+				//pr_info("my_start=%u  j=%u  retry=%u\n", my_start, j, retry);
+			}
+
 			if (likely(j != my_start)) {
 				kring->nr_hwtail = j;
 				still_locked = 0;
@@ -2303,7 +2345,7 @@ retry:
 				 * netmap_bwrap_notify for bwrap. The latter will
 				 * trigger a txsync on the underlying hwna
 				 */
-				if (dst_na->retry && retry--) {
+				if (/*dst_na->retry &&*/ retry--) {
 					/* XXX this is going to call nm_notify again.
 					 * Only useful for bwrap in virtual machines
 					 */
@@ -2491,7 +2533,7 @@ netmap_vp_create(struct nmreq_header *hdr, struct ifnet *ifp,
 	/* Set the mfs to a default value, as it is needed on the VALE
 	 * mismatch datapath. XXX We should set it according to the MTU
 	 * known to the kernel. */
-	vpna->mfs = NM_BDG_MFS_DEFAULT;
+	vpna->mfs = 2048; // NM_BDG_MFS_DEFAULT;
 	vpna->last_smac = ~0llu;
 	/*if (vpna->mfs > netmap_buf_size)  TODO netmap_buf_size is zero??
 		vpna->mfs = netmap_buf_size; */

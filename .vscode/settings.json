@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "netmap_kern.h": "c",
+        "bsd_glue.h": "c",
+        "netmap_user.h": "c",
+        "ip.h": "c",
+        "unistd.h": "c",
+        "array": "c"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/*.cmd": true,
+        "**/*.o": true
+    }
+}
